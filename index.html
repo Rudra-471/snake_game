@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#1b1440" />
+    <meta name="description" content="Word Serpent — a 3D word-building snake game. Slither, spell and shine!" />
+    <title>Word Serpent</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="ui">
+      <div id="loading">
+        <div>
+          <div class="loader-snake"><span></span><span></span><span></span><span></span><span></span></div>
+          <div class="loading-text">Hatching your serpent…</div>
+          <div class="loading-error hidden" id="loading-error"></div>
+        </div>
+      </div>
+      <div id="gate" class="hidden">
+        <div class="gate-inner">
+          <div class="gate-tiles gate-anim"><span>W</span><span>O</span><span>R</span><span>D</span></div>
+          <div class="gate-title gate-anim">SERPENT</div>
+          <div class="gate-cta gate-anim">Click or tap to begin</div>
+          <div class="gate-hint gate-anim">🔊 Best with sound on</div>
+        </div>
+      </div>
+      <div id="intro" class="hidden">
+        <div class="intro-black"></div>
+        <div class="lb top"></div>
+        <div class="lb bottom"></div>
+        <div class="intro-caption"></div>
+        <div class="intro-tagline">SLITHER · SPELL · SHINE</div>
+        <div class="intro-flash"></div>
+        <div class="intro-skip">Click or press any key to skip</div>
+      </div>
+      <div id="hud" class="hidden"></div>
+      <div id="screens" class="hidden"></div>
+      <div id="dpad" class="hidden" aria-label="Direction pad">
+        <button data-dir="up" aria-label="Up">▲</button>
+        <button data-dir="left" aria-label="Left">◀</button>
+        <button data-dir="right" aria-label="Right">▶</button>
+        <button data-dir="down" aria-label="Down">▼</button>
+      </div>
+      <div id="toasts"></div>
+      <div id="def-card" class="glass hidden"></div>
+      <div id="tutorial-tip" class="hidden"></div>
+      <div id="popups"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
