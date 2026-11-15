@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config.js';
 
 const cache = new Map();
@@ -46,8 +47,27 @@ export async function initGlyphs() {
     geo.computeVertexNormals();
     cache.set(ch, { geometry: geo, width: Math.max(width, CONFIG.font.letterSize * 0.4) });
   }
+  // Math modes: one merged geometry per number 10–100 (single digits are cached above)
+  for (let n = 10; n <= 100; n++) cache.set(String(n), buildNumberGlyph(String(n)));
   checkGeometry = buildCheckGeometry();
   return font;
+}
+
+/** Lay digit glyphs side by side and merge them into one centered geometry. */
+function buildNumberGlyph(text) {
+  const gap = CONFIG.font.letterSize * 0.08;
+  const parts = [];
+  let x = 0;
+  for (const ch of text) {
+    const { geometry, width } = cache.get(ch);
+    parts.push(geometry.clone().translate(x + width / 2, 0, 0));
+    x += width + gap;
+  }
+  const width = x - gap;
+  const geo = mergeGeometries(parts, false);
+  parts.forEach((p) => p.dispose());
+  geo.translate(-width / 2, 0, 0);
+  return { geometry: geo, width };
 }
 
 /** Extruded ✓ shape (helvetiker has no check-mark glyph). */
@@ -68,6 +88,11 @@ function buildCheckGeometry() {
 /** @returns {{ geometry: THREE.BufferGeometry, width: number }} */
 export function glyph(ch) {
   return cache.get(String(ch).toUpperCase()) || cache.get('A');
+}
+
+/** Scale that makes a glyph fit a slot `maxWidth` wide (1 for single letters). */
+export function fitScale(ch, maxWidth = 0.62) {
+  return Math.min(1, maxWidth / glyph(ch).width);
 }
 
 export function checkGlyph() {

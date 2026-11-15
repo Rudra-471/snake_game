@@ -65,7 +65,11 @@ On startup a "click to begin" screen appears. The click is needed because browse
 
 Click or press any key to skip it. To turn it off, use Settings → *Play intro movie on start*.
 
-### Modes
+### Choosing a game
+
+After the intro, a **"What do you want to play?"** screen offers **Word Games** (English) or one of the five **Math** games. Word Games opens the word menu (its **← All games** button returns here). Quitting a math game also comes back here.
+
+### Word modes
 
 | Mode | Rules |
 | --- | --- |
@@ -74,8 +78,23 @@ Click or press any key to skip it. To turn it off, use Settings → *Play intro 
 | Word Chain | Each word must start with the last letter of the previous word (+50% bonus). |
 | Kids / Learn | Slow, 3–5 letter words, valid letters glow with a ground ring, no game over. |
 | Daily Challenge | Classic rules, with letter choices seeded by today's date so everyone gets the same letters. |
+| Simple Words | Only the starter list (am, an, at, be… cat, bat, man, bus…). 2-letter words can be banked. 3 lives, 1 decoy, slower speed. |
 
 Difficulty: Easy has 1 decoy, Normal 2 and Hard 3. Hard also adds obstacles, and any crash or decoy ends the run.
+
+### Math modes
+
+All math games use numbers 0–100 on the tiles, 3 lives, and speed up every 5 rounds. A task is shown at the top of the screen with progress chips. Each correct number lands on the snake's body; when a round is finished those numbers turn gold.
+
+| Game | What to do |
+| --- | --- |
+| Same Number | A count is shown (2–5). The first number you eat becomes the target; keep eating that same number until you reach the count. Then a new count appears and you choose again. |
+| Greater / Smaller | The task says **Greatest** or **Smallest**: eat that number from the board. 5 per round, then it switches. |
+| Even / Odd | The task says **Even** or **Odd**: keep eating numbers of that kind. 5 per round, then it switches. |
+| Before / After | The task says **After** or **Before**. Eat any number, then the number right after (or right before) the one you just ate. 5 per round, then it switches. |
+| Skip Counting | The task says **Count by 2 / 3 / 4 / 5 / 10**: eat every multiple of it on the board. |
+
+A wrong number costs a life, and a banner explains why (for example "37 is odd!"). Your progress in the round is kept. A crash also costs a life and restarts the current round. The rules live in [`src/core/math.js`](src/core/math.js) as pure functions.
 
 ### Scoring
 
@@ -120,6 +139,7 @@ Edit [`src/core/wordlists.js`](src/core/wordlists.js):
 
   Themed words are added to the playable list automatically. They show their emoji and definition on the bank card and in the Dictionary, which also gets a filter tab for the new theme.
 - Kids mode uses every word of 5 letters or fewer (`KIDS_WORDS`), and the tutorial uses `TUTORIAL_WORDS`.
+- Simple Words mode uses the `SIMPLE` list (2–3 letters, `SIMPLE_WORDS`). Its 3-letter words are also added to the main list.
 
 ## Adding a world
 
@@ -139,7 +159,7 @@ index.html
 src/
   main.js              boot, renderer, fixed-timestep loop, game rules, input, progression
   config.js            every tunable number (speed, grid, scoring, colors, unlocks)
-  core/                trie.js · spawner.js · scoring.js · wordlists.js
+  core/                trie.js · spawner.js · scoring.js · wordlists.js · math.js (math game rules)
   game/                state.js · snake.js · letterTile.js · arena.js · chain.js · modes.js · glyphs.js · intro.js
   fx/                  particles.js · camera.js · postfx.js · popups.js
   audio/               sfx.js (synth SFX + layered music) · speech.js (TTS)

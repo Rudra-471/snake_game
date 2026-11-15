@@ -6,7 +6,10 @@ import { CONFIG } from '../config.js';
 const KEY = 'word-serpent-save-v1';
 
 export const DEFAULT_SAVE = () => ({
-  highScores: { classic: 0, timeattack: 0, chain: 0, kids: 0 },
+  highScores: {
+    classic: 0, timeattack: 0, chain: 0, kids: 0, simple: 0,
+    'math-same': 0, 'math-compare': 0, 'math-parity': 0, 'math-sequence': 0, 'math-multiples': 0,
+  },
   daily: { date: '', best: 0 },
   totalXp: 0,
   totalScore: 0,

@@ -52,7 +52,51 @@ export const MODES = {
     speedUp: false,
     kidsList: true,
   },
+  simple: {
+    id: 'simple',
+    name: 'Simple Words',
+    emoji: '🔤',
+    desc: 'Tiny starter words: am, at, cat, dog… 3 lives.',
+    hasDifficulty: false,
+    lives: CONFIG.modes.classicLives,
+    timeLimit: 0,
+    chainRule: false,
+    speedUp: true,
+    kidsList: false,
+    wordList: 'simple',
+    minWordLength: 2,
+    decoys: CONFIG.spawn.decoys.easy,
+    stepMs: CONFIG.speed.easy,
+  },
 };
+
+// Math games. Each one uses numbers 0–100, 3 lives, and the board rules in core/math.js.
+const mathMode = (id, math, name, emoji, desc) => ({
+  id,
+  math,
+  name,
+  emoji,
+  desc,
+  hasDifficulty: false,
+  lives: CONFIG.modes.classicLives,
+  timeLimit: 0,
+  chainRule: false,
+  speedUp: true,
+  kidsList: false,
+  stepMs: CONFIG.speed.math,
+});
+
+export const MATH_MODES = {
+  'math-same': mathMode('math-same', 'same', 'Same Number', '🎯', 'Eat a number, then keep eating that same number until you reach the count.'),
+  'math-compare': mathMode('math-compare', 'compare', 'Greater / Smaller', '⚖️', 'Eat the greatest or the smallest number on the board.'),
+  'math-parity': mathMode('math-parity', 'parity', 'Even / Odd', '🔢', 'Keep eating the even (or the odd) numbers.'),
+  'math-sequence': mathMode('math-sequence', 'sequence', 'Before / After', '🪜', 'Eat the number that comes just after (or before) the one you ate.'),
+  'math-multiples': mathMode('math-multiples', 'multiples', 'Skip Counting', '✖️', 'Eat every multiple of 2, 3, 4, 5 or 10 on the board.'),
+};
+
+export function isMathMode(id) {
+  return !!MATH_MODES[id];
+}
 
 export const DIFFICULTIES = {
   easy: { id: 'easy', name: 'Easy' },
@@ -67,7 +111,7 @@ export const DIFFICULTIES = {
  * @param {object} extra { daily?: boolean, tutorial?: boolean }
  */
 export function buildRules(modeId, difficulty = 'normal', extra = {}) {
-  const mode = MODES[modeId] || MODES.classic;
+  const mode = MODES[modeId] || MATH_MODES[modeId] || MODES.classic;
   let diff = mode.hasDifficulty ? difficulty : 'normal';
   if (mode.id === 'kids') diff = 'kids';
   if (extra.daily) diff = 'normal';
@@ -83,8 +127,11 @@ export function buildRules(modeId, difficulty = 'normal', extra = {}) {
     chainRule: mode.chainRule,
     speedUp: mode.speedUp,
     kidsList: mode.kidsList,
-    decoyRange: CONFIG.spawn.decoys[diff] || CONFIG.spawn.decoys.normal,
-    stepMs: CONFIG.speed[diff] || CONFIG.speed.normal,
+    wordList: mode.wordList || (mode.kidsList ? 'kids' : 'full'),
+    minWordLength: mode.minWordLength || CONFIG.spawn.minWordLength,
+    math: mode.math || null, // math game type (core/math.js), or null for word modes
+    decoyRange: mode.decoys || CONFIG.spawn.decoys[diff] || CONFIG.spawn.decoys.normal,
+    stepMs: mode.stepMs || CONFIG.speed[diff] || CONFIG.speed.normal,
     obstacles: diff === 'hard' ? CONFIG.obstacles.hard : 0,
     showHints: diff === 'kids',
     // What happens when you eat a decoy: 'bounce' | 'break' | 'gameover'

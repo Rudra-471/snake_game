@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CONFIG, RARE_LETTERS } from '../config.js';
-import { glyph, checkGlyph } from './glyphs.js';
+import { glyph, checkGlyph, fitScale } from './glyphs.js';
 
 const POOL_SIZE = 16;
 const BASE_Y = 0.55;
@@ -44,6 +44,9 @@ export class TileManager {
     this.showHints = false;
     this.colorblind = false;
     this.letterScale = 1;
+    // Bumped whenever the whole board is cleared, so a tile that was mid-relocation
+    // when its set was replaced doesn't drop back in with a stale letter.
+    this.generation = 0;
 
     this.boxGeo = new RoundedBoxGeometry(0.8, 0.8, 0.8, 3, 0.17);
     this.crystalGeo = new THREE.IcosahedronGeometry(0.42, 0);
@@ -194,8 +197,9 @@ export class TileManager {
       const g = glyph(char).geometry;
       t.top.geometry = g;
       t.front.geometry = g;
-      t.top.scale.setScalar(1.15 * this.letterScale);
-      t.front.scale.setScalar(this.letterScale);
+      const fit = fitScale(char); // multi-digit numbers shrink to fit the block
+      t.top.scale.setScalar(1.15 * this.letterScale * fit);
+      t.front.scale.setScalar(this.letterScale * fit);
       const rare = RARE_LETTERS.has(char);
       const m = t.mats.boxMat;
       if (rare) {
@@ -294,10 +298,12 @@ export class TileManager {
   }
 
   despawnAll() {
+    this.generation++;
     for (const t of [...this.active]) this.despawn(t);
   }
 
   clear() {
+    this.generation++;
     for (const t of [...this.active]) this.release(t);
   }
 
@@ -311,7 +317,9 @@ export class TileManager {
   /** Same letter hops to a new cell (15-second timeout). */
   relocate(t, cell) {
     const { char, kind } = t;
+    const gen = this.generation;
     this.despawn(t, () => {
+      if (gen !== this.generation) return; // its set was replaced meanwhile
       const n = this.acquire();
       this.configure(n, char, kind);
       this.place(n, cell);

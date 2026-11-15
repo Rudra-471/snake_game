@@ -97,10 +97,10 @@ function pickDecoys(exclude, count, rng) {
  * @param {[number,number]} o.decoyRange   min/max decoys for this difficulty
  * @param {string|null} o.requiredFirst    Word Chain: the first letter must be this
  * @param {() => number} o.rng
+ * @param {number} o.minLen               shortest bankable word (2 in Simple Words, else 3)
  * @returns {{ tiles: {char:string, kind:'valid'|'decoy'|'check'}[], longest:number, chainBroken:boolean }}
  */
-export function chooseLetters({ trie, prefix, decoyRange = [2, 2], requiredFirst = null, rng = Math.random }) {
-  const minLen = SP.minWordLength;
+export function chooseLetters({ trie, prefix, decoyRange = [2, 2], requiredFirst = null, rng = Math.random, minLen = SP.minWordLength }) {
   const tiles = [];
   let chainBroken = false;
 

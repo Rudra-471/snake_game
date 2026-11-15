@@ -511,8 +511,23 @@ for (const w of GENERAL.split(/\s+/)) {
 }
 for (const word of WORD_INFO.keys()) all.add(word);
 
+// Simple Words mode: very short starter words (2 and 3 letters) for early readers.
+const SIMPLE = `
+am an as at be by do go he if in is it me my no of on or ox so to up us we ok
+cat bat rat hat fan man can bed red pen hen ten net pin win sit pig dog hot pot sun run cup bus
+`;
+
+/** Simple Words mode list (2–3 letters), sorted. */
+export const SIMPLE_WORDS = [...new Set(SIMPLE.split(/\s+/).map((w) => w.trim().toLowerCase()).filter((w) => /^[a-z]{2,3}$/.test(w)))].sort();
+
+// The 3-letter simple words are also playable in every other word mode.
+for (const word of SIMPLE_WORDS) if (VALID.test(word)) all.add(word);
+
 /** Every playable word, sorted. */
 export const WORDS = [...all].sort();
+
+/** Every word that can show up in the Dictionary (main list + 2-letter simple words). */
+export const DICTIONARY_WORDS = [...new Set([...WORDS, ...SIMPLE_WORDS])].sort();
 
 /** Kids / Learn mode: 3–5 letter words only. */
 export const KIDS_WORDS = WORDS.filter((w) => w.length <= 5);

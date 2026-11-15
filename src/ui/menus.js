@@ -3,9 +3,9 @@
 
 import gsap from 'gsap';
 import { CONFIG } from '../config.js';
-import { MODES, DIFFICULTIES } from '../game/modes.js';
+import { MODES, MATH_MODES, DIFFICULTIES } from '../game/modes.js';
 import { SKINS } from '../game/snake.js';
-import { WORDS, WORD_INFO, THEME_LABELS } from '../core/wordlists.js';
+import { DICTIONARY_WORDS, WORD_INFO, THEME_LABELS } from '../core/wordlists.js';
 import { xpForLevel } from '../storage/save.js';
 import { todayKey } from '../core/spawner.js';
 
@@ -46,6 +46,7 @@ export class Menus {
 
   show(name, data) {
     const builders = {
+      home: () => this.homeHtml(),
       main: () => this.mainHtml(),
       modes: () => this.modesHtml(),
       worlds: () => this.worldsHtml(),
@@ -87,6 +88,40 @@ export class Menus {
     return `<div class="level-chip glass"><span class="lv">Lv ${s.level}</span><div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div><span class="xp-text">${s.totalXp - cur}/${next - cur} XP</span></div>`;
   }
 
+  /** First screen: pick English (word games) or one of the 5 math games. */
+  homeHtml() {
+    const s = this.save;
+    const logo = [...'WORD'].map((c, i) => `<span class="logo-tile t${i}">${c}</span>`).join('');
+    const math = Object.values(MATH_MODES)
+      .map(
+        (m) => `
+        <button class="mode-card glass anim-in home-math" data-action="math" data-value="${m.id}">
+          <div class="mode-emoji">${m.emoji}</div>
+          <div class="mode-name">${esc(m.name)}</div>
+          <div class="mode-desc">${esc(m.desc)}</div>
+          <div class="mode-best">Best: ${s.highScores[m.id] || 0}</div>
+        </button>`
+      )
+      .join('');
+    return `
+      <div class="menu-top">${this.levelChip()}
+        <button class="btn glass chip-btn" data-action="nav" data-to="settings">⚙️</button>
+      </div>
+      <div class="logo anim-in small">${logo}<div class="logo-sub">SERPENT</div></div>
+      <h2 class="screen-title anim-in">What do you want to play?</h2>
+      <div class="home-section anim-in">🔤 English</div>
+      <div class="mode-grid home-grid single">
+        <button class="mode-card glass anim-in home-words" data-action="nav" data-to="main">
+          <div class="mode-emoji">📖</div>
+          <div class="mode-name">Word Games</div>
+          <div class="mode-desc">Spell real words: Classic, Time Attack, Word Chain, Kids and Simple Words.</div>
+        </button>
+      </div>
+      <div class="home-section anim-in">🔢 Math</div>
+      <div class="mode-grid home-grid">${math}</div>
+      <div class="menu-footer">Numbers 0–100 · 3 lives · Arrows / WASD or swipe to steer</div>`;
+  }
+
   mainHtml() {
     const s = this.save;
     const mode = MODES[s.selectedMode] || MODES.classic;
@@ -94,6 +129,7 @@ export class Menus {
     const daily = s.daily.date === todayKey() ? s.daily.best : 0;
     const logo = [...'WORD'].map((c, i) => `<span class="logo-tile t${i}">${c}</span>`).join('');
     return `
+      <button class="btn ghost back" data-action="nav" data-to="home">← All games</button>
       <div class="menu-top">${this.levelChip()}
         <button class="btn glass chip-btn" data-action="achievements">🏅 ${Object.keys(s.achievements).length}/${ACHIEVEMENTS.length}</button>
       </div>
@@ -201,7 +237,7 @@ export class Menus {
       : `<div class="dict-empty">No words here yet — go spell some! 🐍</div>`;
     return `${this.backBtn()}
       <h2 class="screen-title">Dictionary</h2>
-      <div class="dict-progress">${found.length} / ${WORDS.length} words discovered</div>
+      <div class="dict-progress">${found.length} / ${DICTIONARY_WORDS.length} words discovered</div>
       <div class="segmented tabs">${tabs}</div>
       <div class="dict-grid">${cards}</div>`;
   }
@@ -263,8 +299,10 @@ export class Menus {
         ${d.newHigh ? '<div class="go-newhigh anim-in">🎉 New High Score! 🎉</div>' : ''}
         <div class="go-score" id="go-score">0</div>
         <div class="go-stats">
-          <div class="stat anim-in"><div class="stat-v">${d.words}</div><div class="stat-l">Words made</div></div>
-          <div class="stat anim-in"><div class="stat-v">${esc(d.longest ? d.longest.toUpperCase() : '—')}</div><div class="stat-l">Longest word</div></div>
+          <div class="stat anim-in"><div class="stat-v">${d.words}</div><div class="stat-l">${d.math ? 'Rounds done' : 'Words made'}</div></div>
+          ${d.math
+            ? `<div class="stat anim-in"><div class="stat-v">${d.correct}</div><div class="stat-l">Correct numbers</div></div>`
+            : `<div class="stat anim-in"><div class="stat-v">${esc(d.longest ? d.longest.toUpperCase() : '—')}</div><div class="stat-l">Longest word</div></div>`}
           <div class="stat anim-in"><div class="stat-v">${d.accuracy}%</div><div class="stat-l">Accuracy</div></div>
           <div class="stat anim-in"><div class="stat-v">+${d.xp}</div><div class="stat-l">XP gained</div></div>
         </div>
@@ -313,14 +351,17 @@ export class Menus {
     g.sfx.click();
     switch (action) {
       case 'nav':
-        this.returnTo = 'main';
+        this.returnTo = this.current === 'home' ? 'home' : 'main';
         this.show(to);
         break;
       case 'back':
-        this.show(this.current === 'settings' && this.returnTo === 'pause' ? 'pause' : 'main');
+        this.show(this.current === 'settings' && (this.returnTo === 'pause' || this.returnTo === 'home') ? this.returnTo : 'main');
         break;
       case 'play':
         g.startRun({ mode: this.save.selectedMode, difficulty: this.save.selectedDifficulty });
+        break;
+      case 'math':
+        g.startRun({ mode: value });
         break;
       case 'daily':
         g.startRun({ mode: 'classic', difficulty: 'normal', daily: true });

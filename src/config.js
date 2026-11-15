@@ -22,6 +22,7 @@ export const CONFIG = {
     normal: 205,
     hard: 170,
     kids: 300,
+    math: 240,
     tutorial: 300,
     menu: 230,
     speedUpEveryWords: 5,

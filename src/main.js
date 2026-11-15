@@ -8,10 +8,14 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { CONFIG } from './config.js';
 import { Trie } from './core/trie.js';
 import { chooseLetters, placeTiles, mulberry32, seedFromString, todayKey } from './core/spawner.js';
-import { scoreWord } from './core/scoring.js';
-import { WORDS, KIDS_WORDS, TUTORIAL_WORDS, getWordInfo } from './core/wordlists.js';
+import { scoreWord, comboBonus } from './core/scoring.js';
+import { WORDS, KIDS_WORDS, TUTORIAL_WORDS, SIMPLE_WORDS, getWordInfo } from './core/wordlists.js';
+import {
+  newRound, boardFor, applyCorrect, refillsEachAnswer, explainMistake, describeRound, roundSummary,
+  roundBasePoints, POINTS_PER_CORRECT,
+} from './core/math.js';
 import { StateMachine, STATES } from './game/state.js';
-import { buildRules } from './game/modes.js';
+import { buildRules, isMathMode } from './game/modes.js';
 import { initGlyphs } from './game/glyphs.js';
 import { Arena } from './game/arena.js';
 import { Snake } from './game/snake.js';
@@ -113,6 +117,7 @@ class Game {
       full: new Trie(WORDS),
       kids: new Trie(KIDS_WORDS),
       tutorial: new Trie(TUTORIAL_WORDS),
+      simple: new Trie(SIMPLE_WORDS),
     };
 
     this.arena = new Arena(this.scene, this.renderer, this.sun, this.hemi);
@@ -152,7 +157,7 @@ class Game {
       sfx.setMusicMode('menu');
       sfx.startMusic(0.4);
     }
-    this.menus.show('main');
+    this.menus.show('home');
   }
 
   // =====================================================================
@@ -339,7 +344,7 @@ class Game {
     sfx.unlock();
     sfx.startMusic();
     // First launch: the interactive tutorial runs before the chosen mode
-    if (!this.save.tutorialDone && !cfg.tutorial && !cfg.daily) {
+    if (!this.save.tutorialDone && !cfg.tutorial && !cfg.daily && !isMathMode(cfg.mode)) {
       this.afterTutorial = cfg;
       cfg = { mode: 'classic', difficulty: 'normal', tutorial: true };
     } else if (!cfg.tutorial) {
@@ -348,7 +353,7 @@ class Game {
 
     this.cleanupRun();
     const rules = buildRules(cfg.mode, cfg.difficulty, { daily: cfg.daily, tutorial: cfg.tutorial });
-    const trie = rules.tutorial ? this.tries.tutorial : rules.kidsList ? this.tries.kids : this.tries.full;
+    const trie = rules.tutorial ? this.tries.tutorial : this.tries[rules.wordList] || this.tries.full;
     const seed = cfg.daily ? seedFromString(`word-serpent-${todayKey()}`) : (Math.random() * 2 ** 32) >>> 0;
 
     this.run = {
@@ -356,6 +361,7 @@ class Game {
       rules,
       trie,
       letterRng: mulberry32(seed),
+      round: null, // math modes: the current task (core/math.js)
       score: 0,
       lives: rules.lives,
       combo: 0,
@@ -383,6 +389,7 @@ class Game {
       hint: false,
       double: false,
     };
+    if (rules.math) this.run.round = newRound(rules.math, this.run.letterRng);
     this.recomputeStep();
 
     if (!this.save.worldsPlayed.includes(this.arena.worldId)) {
@@ -398,7 +405,7 @@ class Game {
 
     this.menus.hide();
     this.hud.show();
-    this.hud.setMode(rules.modeName + (rules.mode !== 'kids' && !rules.tutorial && rules.difficulty !== 'normal' ? ` · ${rules.difficulty}` : ''));
+    this.hud.setMode((rules.math ? 'Math · ' : '') + rules.modeName + (rules.mode !== 'kids' && !rules.tutorial && rules.difficulty !== 'normal' ? ` · ${rules.difficulty}` : ''));
     this.hud.setScore(0, false);
     this.hud.setLives(rules.lives);
     this.hud.setCombo(0);
@@ -415,6 +422,7 @@ class Game {
     this.spawnSet();
     this.hud.banner(rules.tutorial ? 'Welcome!' : 'Ready… Go!', { duration: 0.6 });
     if (rules.tutorial) this.showTutorialStep(1);
+    if (rules.math) this.after(1, () => this.announceRound());
   }
 
   cleanupRun() {
@@ -445,6 +453,7 @@ class Game {
   }
 
   quitToMenu() {
+    const toHome = !!(this.run && this.run.rules.math);
     if (this.run && !this.state.is(STATES.GAME_OVER) && !this.run.rules.tutorial) this.commitProgress(false);
     this.cleanupRun();
     this.run = null;
@@ -457,7 +466,7 @@ class Game {
     sfx.setDuck(1);
     sfx.setPercussion(false);
     sfx.setMusicMode('menu');
-    this.menus.show('main');
+    this.menus.show(toHome ? 'home' : 'main');
   }
 
   togglePause() {
@@ -486,6 +495,10 @@ class Game {
 
   spawnSet() {
     const run = this.run;
+    if (run.rules.math) {
+      this.spawnMathSet();
+      return;
+    }
     const requiredFirst = run.rules.chainRule && run.word === '' && run.lastLetter ? run.lastLetter : null;
     const { tiles, longest, chainBroken } = chooseLetters({
       trie: run.trie,
@@ -493,28 +506,218 @@ class Game {
       decoyRange: run.rules.decoyRange,
       requiredFirst,
       rng: run.letterRng,
+      minLen: run.rules.minWordLength,
     });
     if (chainBroken) {
       run.lastLetter = null;
       run.chainLen = 0;
       this.hud.banner(`No words start with ${requiredFirst.toUpperCase()} — new chain!`, { duration: 1.4 });
     }
-    // Occasionally add a power-up (always placed last, so it never displaces a needed tile)
-    if (!run.rules.tutorial && Math.random() < CONFIG.powerups.chance) {
-      const types = CONFIG.powerups.types;
-      tiles.push({ char: types[Math.floor(Math.random() * types.length)], kind: 'power' });
-    }
-    this.tiles.showHints = run.rules.showHints || run.hint;
-    const cells = placeTiles({ count: tiles.length, snake: this.snake.cells, dir: this.snake.nextDir, obstacles: run.obstacles });
-    this.tiles.spawnSet(tiles.slice(0, cells.length).map((t, i) => ({ ...t, cell: cells[i] })));
+    this.maybeAddPower(tiles);
+    const placed = this.placeSet(tiles);
     run.longest = longest;
     this.updateWordHud();
+    this.ensureWayForward(placed);
+  }
+
+  /** Occasionally add a power-up (always placed last, so it never displaces a needed tile). */
+  maybeAddPower(tiles) {
+    if (this.run.rules.tutorial || Math.random() >= CONFIG.powerups.chance) return;
+    const types = CONFIG.powerups.types;
+    tiles.push({ char: types[Math.floor(Math.random() * types.length)], kind: 'power' });
+  }
+
+  /** Place tiles on free cells and drop them in. Returns the tiles that fit. */
+  placeSet(tiles) {
+    const run = this.run;
+    this.tiles.showHints = run.rules.showHints || run.hint;
+    const cells = placeTiles({ count: tiles.length, snake: this.snake.cells, dir: this.snake.nextDir, obstacles: run.obstacles });
+    const placed = tiles.slice(0, cells.length).map((t, i) => ({ ...t, cell: cells[i] }));
+    this.tiles.spawnSet(placed);
+    return placed;
+  }
+
+  /** If the board was too crowded for any useful tile, try again shortly (never leave an empty board). */
+  ensureWayForward(placed) {
+    if (placed.some((t) => t.kind === 'valid' || t.kind === 'check')) return;
+    const run = this.run;
+    this.after(1, () => {
+      if (this.run !== run || run.banking || this.state.is(STATES.GAME_OVER)) return; // a bank / round end spawns its own set
+      if (!this.state.active) {
+        this.ensureWayForward([]); // paused: check again later
+        return;
+      }
+      this.tiles.despawnAll();
+      this.spawnSet();
+    });
+  }
+
+  // ---------- math modes ----------
+
+  spawnMathSet() {
+    const run = this.run;
+    const round = run.round;
+    const tiles = boardFor(round, run.letterRng).map((b) => ({ char: String(b.n), kind: b.kind }));
+    this.maybeAddPower(tiles);
+    const placed = this.placeSet(tiles);
+    // Skip Counting: the round ends when every multiple that landed has been eaten
+    if (round.type === 'multiples') round.need = round.got + placed.filter((t) => t.kind === 'valid').length;
+    this.updateMathHud();
+    this.ensureWayForward(placed);
+  }
+
+  updateMathHud() {
+    const d = describeRound(this.run.round);
+    this.hud.setTask(d.label, d.chips);
+    this.hud.setHint(d.hint);
+  }
+
+  /** Show + speak the task for a new round. */
+  announceRound() {
+    if (!this.run || !this.run.round) return;
+    const d = describeRound(this.run.round);
+    this.updateMathHud();
+    this.hud.banner(d.label, { duration: 1 });
+    speech.say(d.say);
+  }
+
+  /** Same kind of task again (keeps the goal / table), used after a crash. */
+  restartRound(round) {
+    const fresh = newRound(round.type, this.run.letterRng);
+    if (round.goal) fresh.goal = round.goal;
+    if (round.table) fresh.table = round.table;
+    return fresh;
+  }
+
+  onMathCorrect(tile) {
+    const run = this.run;
+    const round = run.round;
+    const n = Number(tile.char);
+    const color = tile.mats.boxMat.color.getStyle();
+    const pos = this.tiles.consume(tile);
+    this.particles.burst(pos, color, 26);
+    this.particles.sparkle(pos, '#ffffff', 8);
+    run.correct++;
+    sfx.eat(Math.min(round.got, 7));
+    this.snake.setExpression('happy', 0.45);
+    this.snake.squash();
+    speech.say(String(n));
+
+    // The number arcs onto the new tail segment, just like a letter
+    const idx = this.snake.length - 1;
+    this.flyer.fly(tile.char, pos, (out) => this.snake.segmentLetterWorld(idx, out), {
+      duration: 0.38,
+      height: 1.6,
+      onDone: () => this.snake.setLetterVisible(idx, true),
+    });
+
+    run.score += Math.round(POINTS_PER_CORRECT * (1 + comboBonus(run.combo)));
+    this.hud.setScore(run.score);
+
+    if (applyCorrect(round, n)) {
+      this.mathRoundComplete();
+      return;
+    }
+    this.updateMathHud();
+    if (refillsEachAnswer(round)) {
+      this.tiles.despawnAll();
+      this.spawnMathSet();
+    }
+  }
+
+  mathRoundComplete() {
+    const run = this.run;
+    const round = run.round;
+    this.tiles.despawnAll();
+
+    // This round's numbers stay on the body and turn gold, joined by the light beam
+    this.snake.markBanked(run.bankedLength, this.snake.length, this.time + 0.1);
+    run.bankedLength = this.snake.length;
+    this.after(0.25, () => sfx.link());
+
+    const base = roundBasePoints(round);
+    const combo = comboBonus(run.combo);
+    let total = Math.round(base * (1 + combo));
+    const parts = [`round +${base}`];
+    if (combo > 0) parts.push(`combo +${Math.round(combo * 100)}%`);
+    if (run.double) {
+      total *= 2;
+      parts.push('⭐ ×2');
+      run.double = false;
+    }
+    if (run.hint && !run.rules.showHints) {
+      run.hint = false;
+      this.tiles.showHints = false;
+    }
+
+    const summary = roundSummary(round);
+    run.score += total;
+    run.words.push(summary.title);
+    run.combo++;
+    run.maxCombo = Math.max(run.maxCombo, run.combo);
+    run.banking = true;
+
+    sfx.bank();
+    if (run.combo >= 2) this.after(0.35, () => sfx.combo(run.combo));
+    sfx.setPercussion(run.combo >= 3);
+    this.hud.setCombo(run.combo);
+    this.hud.setTask(describeRound(round).label, describeRound(round).chips);
+    this.hud.setHint('Round complete! 🎉');
+    this.particles.confetti(this.snake.headWorld);
+    this.snake.setExpression('happy', 1.4);
+    this.snake.squash();
+    this.popups.show(`+${total}`, this.snake.headWorld, this.rig.camera, (x, y) => {
+      this.hud.flyScore(x, y, `+${total}`, () => this.run && this.hud.setScore(this.run.score));
+    });
+    this.hud.defCard({ word: summary.title, emoji: summary.emoji, def: summary.def, points: total, parts });
+    this.after(0.5, () => speech.say(['Great job!', 'Well done!', 'Awesome!', 'You did it!'][run.words.length % 4]));
+
+    // Fireworks + speed-up every 5 rounds
+    if (run.words.length % CONFIG.speed.speedUpEveryWords === 0) {
+      this.fireworks();
+      run.speedLevel++;
+      this.recomputeStep();
+      this.after(1, () => this.hud.banner(`${run.words.length} rounds! Speed up 💨`, { duration: 0.9 }));
+    }
+
+    this.after(1.6, () => {
+      if (this.run !== run) return;
+      run.banking = false;
+      this.acc = 0;
+      run.round = newRound(round.type, run.letterRng, round);
+      this.spawnMathSet();
+      this.announceRound();
+    });
+  }
+
+  onMathMistake(tile) {
+    const run = this.run;
+    const round = run.round;
+    const n = Number(tile.char);
+    const answers = this.tiles.liveTiles().filter((t) => t !== tile && t.kind === 'valid').map((t) => Number(t.char));
+    const pos = this.tiles.consume(tile);
+    this.particles.burst(pos, '#ff4d4d', 30, 6);
+    sfx.error();
+    this.rig.shake(0.7);
+    this.snake.setExpression('dizzy', 1.3);
+    run.mistakes++;
+    this.save.stats.mistakes++;
+    this.resetCombo();
+    const why = explainMistake(round, n, answers);
+    this.hud.banner(why, { duration: 1.1 });
+    speech.say(why);
+    if (!this.loseLife()) return;
+    // Progress in the round is kept; the board refills (Skip Counting keeps its board)
+    if (refillsEachAnswer(round)) {
+      this.tiles.despawnAll();
+      this.spawnMathSet();
+    }
   }
 
   updateWordHud() {
     const run = this.run;
     const node = run.trie.find(run.word);
-    const bankable = node && node.isWord && run.word.length >= CONFIG.spawn.minWordLength;
+    const bankable = node && node.isWord && run.word.length >= run.rules.minWordLength;
     this.hud.setWord(run.word, run.word ? (bankable ? 'bankable' : 'progress') : 'empty');
     let hint = `Longest word possible from here: ${run.longest} letters`;
     if (run.rules.chainRule && !run.word && run.lastLetter) hint = `Start with “${run.lastLetter.toUpperCase()}” · ${hint}`;
@@ -628,8 +831,10 @@ class Game {
     run.steps++;
     const next = this.snake.peekNextCell();
     const tile = this.tiles.tileAt(next);
-    // Letters grow the body, and so does ✓ (it adds the link knot after the word)
-    const growing = !!tile && (tile.kind === 'valid' || tile.kind === 'check');
+    // Letters grow the body, and so does ✓ (it adds the link knot after the word).
+    // The body stops growing at the size of the segment pool.
+    const canGrow = this.snake.length < CONFIG.snake.maxSegments;
+    const growing = canGrow && !!tile && (tile.kind === 'valid' || tile.kind === 'check');
     const crash = this.snake.wouldCollide(next, growing, run.obstacles);
     if (crash) {
       this.onCrash(crash);
@@ -639,17 +844,19 @@ class Game {
     if (!tile) {
       this.snake.step();
     } else if (tile.kind === 'valid') {
-      this.snake.step(tile.char);
-      this.onLetter(tile);
+      this.snake.step(canGrow ? tile.char : null);
+      if (run.rules.math) this.onMathCorrect(tile);
+      else this.onLetter(tile);
     } else if (tile.kind === 'check') {
-      this.snake.step({ kind: 'link', time: this.time + 0.15 + run.word.length * 0.07 });
+      this.snake.step(canGrow ? { kind: 'link', time: this.time + 0.15 + run.word.length * 0.07 } : null);
       this.onBank(tile);
     } else if (tile.kind === 'power') {
       this.snake.step();
       this.onPower(tile);
     } else {
       this.snake.step();
-      if (run.rules.onDecoy === 'bounce') this.onDecoyBounce(tile);
+      if (run.rules.math) this.onMathMistake(tile);
+      else if (run.rules.onDecoy === 'bounce') this.onDecoyBounce(tile);
       else this.onDecoyMistake(tile);
     }
     if (run.steps % CONFIG.snake.dustEverySteps === 0) {
@@ -897,6 +1104,7 @@ class Game {
     run.bankedLength = CONFIG.snake.baseLength; // a crash scatters the body (words remain in the sky chain)
     run.respawnTimer = CONFIG.modes.respawnDelay;
     this.acc = 0;
+    if (run.rules.math) run.round = this.restartRound(run.round); // the round's numbers scattered
     this.tiles.despawnAll();
     this.spawnSet();
     this.hud.banner('Get ready!', { duration: 0.6 });
@@ -1164,6 +1372,8 @@ class Game {
     const longest = run.words.reduce((a, w) => (w.length > a.length ? w : a), '');
     return {
       title: run.rules.daily ? `Daily: ${title}` : title,
+      math: !!run.rules.math,
+      correct: run.correct,
       score: run.score,
       words: run.words.length,
       longest,

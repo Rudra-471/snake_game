@@ -184,6 +184,7 @@ body.dyslexia {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
+.screen-home,
 .screen-modes,
 .screen-worlds,
 .screen-skins,
@@ -292,6 +293,15 @@ body.dyslexia {
 }
 .menu-grid .btn span { font-size: calc(14px * var(--text-scale)); }
 .menu-footer { font-size: 13px; opacity: 0.7; text-align: center; }
+
+/* home: English vs Math */
+.home-section { font-size: calc(20px * var(--text-scale)); font-weight: 700; align-self: center; width: min(900px, 100%); opacity: 0.95; }
+.home-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.home-grid.single { grid-template-columns: minmax(0, 420px); justify-content: center; }
+.home-words { background: linear-gradient(135deg, rgba(94, 240, 138, 0.28), rgba(76, 201, 240, 0.28)); }
+.home-math { background: linear-gradient(135deg, rgba(255, 209, 102, 0.22), rgba(255, 124, 229, 0.22)); }
+.logo.small .logo-tile { width: clamp(44px, 9vw, 64px); height: clamp(44px, 9vw, 64px); font-size: clamp(28px, 6vw, 42px); border-radius: 14px; }
+.logo.small .logo-sub { font-size: clamp(26px, 5.5vw, 40px); }
 
 /* modes */
 .mode-grid {
@@ -642,6 +652,24 @@ input[type='range'] {
   border: 3px solid var(--chip);
 }
 body.dyslexia .word-chip { margin: 0 3px; }
+/* math task: label pill + number chips (numbers can be up to 3 digits wide) */
+.word-chip.num { width: auto; min-width: calc(44px * var(--text-scale)); padding: 0 8px; }
+.word-chip.todo { opacity: 0.55; }
+.task-label {
+  display: inline-grid;
+  place-items: center;
+  height: calc(48px * var(--text-scale));
+  padding: 0 16px;
+  margin-right: 4px;
+  font-size: calc(22px * var(--text-scale));
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #2b2240;
+  background: var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.25), 0 8px 18px rgba(0, 0, 0, 0.25);
+}
 .hud-word.bankable .word-chip { animation: glowChip 0.9s ease-in-out infinite; }
 @keyframes glowChip { 50% { box-shadow: 0 5px 0 var(--chip), 0 0 22px var(--chip); } }
 .hud-hint { font-size: calc(14px * var(--text-scale)); opacity: 0.9; margin-top: 6px; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
@@ -771,6 +799,8 @@ body.dyslexia .word-chip { margin: 0 3px; }
   .hud-timer { font-size: 20px; min-width: 48px; }
   .hud-center { top: 86px; width: calc(100% - 24px); }
   .word-chip { width: 34px; height: 38px; font-size: 23px; border-radius: 9px; }
+  .word-chip.num { min-width: 34px; padding: 0 5px; }
+  .task-label { height: 38px; font-size: 17px; padding: 0 10px; border-radius: 9px; }
   .hud-banner { font-size: 30px; }
   .hud-banner.big { font-size: 44px; }
   #def-card { bottom: 200px; }

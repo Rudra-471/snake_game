@@ -55,6 +55,7 @@ export class Hud {
     this.displayScore = 0;
     this.colorblind = false;
     this.lastWord = '';
+    this.lastTaskDone = 0;
   }
 
   show() {
@@ -156,6 +157,28 @@ export class Hud {
     if (status === 'bankable') this.wordEl.classList.add('bankable');
     else this.wordEl.classList.remove('bankable');
     this.lastWord = word;
+  }
+
+  /**
+   * Math modes: the task label (e.g. "Even") plus progress chips.
+   * @param {string} label
+   * @param {{text:string, state:'done'|'todo'}[]} chips
+   */
+  setTask(label, chips) {
+    const done = this.color('valid');
+    const todo = this.color('pending');
+    const html = chips
+      .map((c) => `<span class="word-chip num ${c.state}" style="--chip:${c.state === 'done' ? done : todo}">${escapeHtml(c.text)}</span>`)
+      .join('');
+    this.wordEl.classList.remove('bankable');
+    this.wordEl.innerHTML = `<span class="task-label">${escapeHtml(label)}</span>${html}`;
+    const doneChips = this.wordEl.querySelectorAll('.word-chip.done');
+    const last = doneChips[doneChips.length - 1];
+    if (last && doneChips.length > this.lastTaskDone) {
+      gsap.fromTo(last, { y: -30, scale: 0.4, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.45, ease: 'back.out(3)' });
+    }
+    this.lastTaskDone = doneChips.length;
+    this.lastWord = '';
   }
 
   breakWord() {

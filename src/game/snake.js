@@ -19,7 +19,7 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CONFIG } from '../config.js';
-import { glyph } from './glyphs.js';
+import { glyph, fitScale } from './glyphs.js';
 
 const N = CONFIG.grid.size;
 const HALF = (N * CONFIG.grid.cell) / 2;
@@ -518,7 +518,7 @@ export class Snake {
         seg.letter.visible = true;
         // banked letters pop as the glow wave reaches them
         const pop = banked ? 1 + 0.6 * Math.max(0, 1 - Math.abs(time - this.revealAt[i] - 0.1) / 0.15) : 1;
-        seg.letter.scale.setScalar(pop / scale); // keep letters readable on the thin tail
+        seg.letter.scale.setScalar((pop / scale) * fitScale(ch, 0.7)); // readable on the thin tail; numbers fit the segment
       } else {
         seg.letter.visible = false;
       }
@@ -532,7 +532,8 @@ export class Snake {
   /** Light beams joining consecutive formed-word segments (banked letters + links). */
   renderBeams(n, time) {
     const joined = (k) => k === 'banked' || k === 'link';
-    for (let i = 1; i < n; i++) {
+    const last = Math.min(n, SN.maxSegments - 1); // only pooled segments have beams
+    for (let i = 1; i < last; i++) {
       const seg = this.segments[i];
       const next = this.segments[i + 1];
       const show = this.visible && i + 1 < n && joined(this.kinds[i]) && joined(this.kinds[i + 1]);
